@@ -1,3 +1,6 @@
+#ifndef LINKEDLIST_H
+#define LINKEDLIST_H
+
 #include <string>
 #include <iostream>
 #include "odf_types.hpp"
@@ -61,3 +64,5 @@ public:
          return head;
      }
 };
+
+#endif
