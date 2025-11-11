@@ -49,8 +49,7 @@ void FreeSpaceManager::printBitmap() const {
 
 int64_t FreeSpaceManager::allocate(uint64_t N) {
     int64_t start = findFreeBlocks(N);
-    if (start == -1) return -1; // Not enough space
-    // Mark blocks as used
+    if (start == -1) return -1; 
     for (uint64_t i = 0; i < N; ++i) {
         markUsed(start + i);
     }
