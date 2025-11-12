@@ -3,6 +3,11 @@
 #include <cstring>
 #include <ctime>
 #include <iostream>
+#include "core/user_manager.h"
+#include <cstring>
+#include <vector>
+#include <openssl/sha.h>
+#include <cstdio>  // for sprintf
 
 
 int serialize_fs_tree(FSNode* node, std::ofstream& ofs) {
@@ -61,10 +66,24 @@ FSNode* load_fs_tree(std::ifstream& ifs, uint64_t& offset, uint64_t end_offset) 
     return node;
 }
 
+//----------------- SHA256 helper -----------------
+std::string sha256(const std::string &password) {
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    SHA256(reinterpret_cast<const unsigned char*>(password.c_str()), password.size(), hash);
+
+    char buf[65];
+    for (int i = 0; i < 32; i++)
+        sprintf(buf + i*2, "%02x", hash[i]);
+    buf[64] = 0;
+    return std::string(buf);
+}
+
+// ----------------- fs_format -----------------
 int fs_format(const char* omni_path, const char* config_path) {
     std::ofstream ofs(omni_path, std::ios::binary | std::ios::trunc);
     if (!ofs.is_open()) return static_cast<int>(OFSErrorCodes::ERROR_IO_ERROR);
 
+    // Create OMNIHeader
     OMNIHeader header(0x00010000, 1024ULL * 1024 * 50, sizeof(OMNIHeader), 4096);
     std::strncpy(header.magic, "OMNIFS01", sizeof(header.magic) - 1);
     header.config_timestamp = std::time(nullptr);
@@ -72,20 +91,27 @@ int fs_format(const char* omni_path, const char* config_path) {
     header.max_users = 1024;
     ofs.write(reinterpret_cast<const char*>(&header), sizeof(header));
 
-    // Write empty users
+    // ----------------- Default Admin -----------------
+    std::string hashed_admin = sha256("admin123");
+    UserInfo admin_user("admin", hashed_admin, UserRole::ADMIN, std::time(nullptr));
+    ofs.write(reinterpret_cast<const char*>(&admin_user), sizeof(UserInfo));
+
+    // ----------------- Empty Users -----------------
     UserInfo empty_user;
-    for (uint32_t i = 0; i < header.max_users; ++i)
+    for (uint32_t i = 1; i < header.max_users; ++i)
         ofs.write(reinterpret_cast<const char*>(&empty_user), sizeof(UserInfo));
 
-    // Write root directory
+    // ----------------- Root Directory -----------------
     FileEntry root_entry("root", EntryType::DIRECTORY, 0, 0755, "admin", 0);
     ofs.write(reinterpret_cast<const char*>(&root_entry), sizeof(FileEntry));
 
-    // Initialize bitmap
+    // ----------------- Free Space Bitmap -----------------
     uint64_t total_blocks = header.total_size / header.block_size;
     FreeSpaceManager fsm(total_blocks);
+
     uint64_t used_blocks = (sizeof(OMNIHeader) + header.max_users * sizeof(UserInfo) + sizeof(FileEntry) + header.block_size - 1) / header.block_size;
-    for (uint64_t i = 0; i < used_blocks; ++i) fsm.markUsed(i);
+    for (uint64_t i = 0; i < used_blocks; ++i)
+        fsm.markUsed(i);
 
     const std::vector<uint8_t>& bitmap = fsm.getBitmap();
     ofs.write(reinterpret_cast<const char*>(bitmap.data()), bitmap.size());
@@ -95,9 +121,10 @@ int fs_format(const char* omni_path, const char* config_path) {
 }
 
 int fs_init(void** instance, const char* omni_path, const char* config_path) {
+    
     std::ifstream ifs(omni_path, std::ios::binary);
     if (!ifs.is_open()) return static_cast<int>(OFSErrorCodes::ERROR_IO_ERROR);
-
+    
     FSInstance* fs = new FSInstance();
     fs->omni_path = omni_path;
 
@@ -175,6 +202,8 @@ void fs_shutdown(void* instance) {
     delete fs->fsm;
     delete fs->root;
     delete fs->users;
-    for (auto session : fs->sessions) delete session;
+    for (auto session : fs->sessions) 
+      delete static_cast<SessionInfo*>(session);
+
     delete fs;
 }

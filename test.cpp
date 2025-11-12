@@ -1,95 +1,111 @@
 #include <iostream>
-#include <string>
+#include <vector>
 #include <cstring>
-#include "HashTable.h"
-#include "LinkedList.h"
-#include "FSNode.h"
-#include "FreeSpaceManager.h"  // Make sure you implemented this
-
-using namespace std;
-
-// Helper to create a FileEntry safely
-FileEntry* createFileEntry(const string& name, EntryType type) {
-    FileEntry* fe = new FileEntry();
-    strncpy(fe->name, name.c_str(), sizeof(fe->name) - 1);
-    fe->name[sizeof(fe->name) - 1] = '\0'; // Ensure null-termination
-    fe->setType(type);
-    return fe;
-}
+#include "core/fs_core.h"
+#include "core/user_manager.h"
 
 int main() {
-    cout << "===== TESTING LINKEDLIST =====\n";
-    LinkedList<int*> ll;
-    int* a = new int(10);
-    int* b = new int(20);
-    ll.push_back(a);
-    ll.push_back(b);
+    void* fs_instance = nullptr;
 
-    auto node = ll.getHead();
-    while (node) {
-        cout << "LinkedList Node: " << *node->data << endl;
-        node = node->next;
+    // --------------------------
+    // 0. Format File System
+    // --------------------------
+    int status = fs_format("student_test.omni", "default.uconf");
+    if (status != 0) {
+        std::cerr << "FS Format failed with code: " << status << std::endl;
+        return -1;
     }
-    ll.remove(a);
-    cout << "After removing a:\n";
-    node = ll.getHead();
-    while (node) {
-        cout << "LinkedList Node: " << *node->data << endl;
-        node = node->next;
+    std::cout << "FS formatted successfully.\n";
+
+    // --------------------------
+    // 1. Initialize File System
+    // --------------------------
+    status = fs_init(&fs_instance, "student_test.omni", "default.uconf");
+    if (status != 0) {
+        std::cerr << "FS Init failed with code: " << status << std::endl;
+        return -1;
     }
+    std::cout << "FS Initialized Successfully.\n";
 
-    cout << "\n===== TESTING HASHTABLE =====\n";
-    HashTable<int> ht;
-    ht.insert("one", new int(1));
-    ht.insert("two", new int(2));
+    // --------------------------
+    // 2. Create User Manager Object
+    // --------------------------
+    FSInstance* fs = static_cast<FSInstance*>(fs_instance);
+user_manager um(fs->users);
+    
+    
+    void* admin_session = nullptr;
 
-    int* val = ht.get("two");
-    if (val) cout << "HashTable get 'two': " << *val << endl;
-
-    ht.remove("one");
-    val = ht.get("one");
-    cout << "HashTable get 'one' after remove: " << (val ? "found" : "not found") << endl;
-
-    cout << "\n===== TESTING FREESPACEMANAGER =====\n";
-    FreeSpaceManager fsm(100);  // 100 blocks
-    int start1 = fsm.allocate(10);
-    int start2 = fsm.allocate(20);
-    cout << "Allocated blocks: 10 at " << start1 << ", 20 at " << start2 << endl;
-
-    fsm.free(start1, 10);
-    cout << "Freed 10 blocks starting at " << start1 << endl;
-
-    cout << "\n===== TESTING FSNODE =====\n";
-    FileEntry* rootEntry = createFileEntry("root", EntryType::DIRECTORY);
-    FSNode* root = new FSNode(rootEntry);
-
-    FileEntry* file1Entry = createFileEntry("file1", EntryType::FILE);
-    FSNode* file1 = new FSNode(file1Entry);
-
-    FileEntry* dir1Entry = createFileEntry("dir1", EntryType::DIRECTORY);
-    FSNode* dir1 = new FSNode(dir1Entry);
-
-    root->addChild(file1);
-    root->addChild(dir1);
-
-    cout << "Children of root:\n";
-    auto childNode = root->children->getHead();
-    while (childNode) {
-        cout << "- " << childNode->data->entry->name << endl;
-        childNode = childNode->next;
+status = um.user_login(&admin_session, "admin", "admin123");
+std::cout << "Login status code: " << status << std::endl;
+std::cout << "SUCCESS enum value: " << static_cast<int>(OFSErrorCodes::SUCCESS) << std::endl;
+    // --------------------------
+    // 3. Admin User Login
+    // --------------------------
+    status = um.user_login(&admin_session, "admin", "admin123");
+    if (status != 0) {
+       std::cerr << "Admin login failed.\n";
+    return -1;
     }
+    std::cout << "Admin logged in.\n";
 
-    cout << "Find 'dir1': " << root->findChild("dir1")->entry->name << endl;
-    root->removeChild("file1");
-    cout << "After removing file1, children of root:\n";
-    childNode = root->children->getHead();
-    while (childNode) {
-        cout << "- " << childNode->data->entry->name << endl;
-        childNode = childNode->next;
+    // --------------------------
+    // 4. Create a Normal User
+    // --------------------------
+    status = um.user_create(admin_session, "john_doe", "password123", UserRole::NORMAL);
+    if (status == 0) std::cout << "User john_doe created.\n";
+    else std::cerr << "User creation failed: " << status << std::endl;
+
+    // --------------------------
+    // 5. List Users
+    // --------------------------
+    UserInfo* users = nullptr;
+    int count = 0;
+    status = um.user_list(admin_session, &users, &count);
+    if (status == 0) {
+        std::cout << "Users in system (" << count << "):\n";
+        for (int i = 0; i < count; ++i)
+            std::cout << " - " << users[i].username << "\n";
     }
 
-    // Cleanup
-    delete root;
+    // --------------------------
+    // 6. User Login
+    // --------------------------
+    void* user_session = nullptr;
+    status = um.user_login(&user_session, "john_doe", "password123");
+    if (status == 0) std::cout << "User john_doe logged in successfully.\n";
+    else std::cerr << "User login failed: " << status << std::endl;
+
+    // --------------------------
+    // 7. Get Session Info
+    // --------------------------
+    SessionInfo info;
+    status = um.get_session_info(user_session, &info);
+    if (status == 0) {
+        std::cout << "Session info for user: " << info.user.username
+                  << ", login time: " << info.login_time << "\n";
+    }
+
+    // --------------------------
+    // 8. Delete User
+    // --------------------------
+    status = um.user_delete(admin_session, "john_doe");
+    if (status == 0) std::cout << "User john_doe deleted.\n";
+    else std::cerr << "User deletion failed: " << status << std::endl;
+
+    // --------------------------
+    // 9. Logout Sessions
+    // --------------------------
+    um.user_logout(user_session);
+    std::cout << "User john_doe logged out.\n";
+    um.user_logout(admin_session);
+    std::cout << "Admin logged out.\n";
+
+    // --------------------------
+    // 10. Shutdown File System
+    // --------------------------
+    fs_shutdown(fs_instance);
+    std::cout << "FS shutdown completed.\n";
 
     return 0;
 }
