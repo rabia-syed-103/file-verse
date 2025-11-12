@@ -33,10 +33,10 @@ std::string user_manager::hash_password(const std::string& password) {
     unsigned char hash[SHA256_DIGEST_LENGTH];
     SHA256(reinterpret_cast<const unsigned char*>(password.c_str()), password.size(), hash);
 
-    char buf[65];
-    for (int i = 0; i < 32; i++)
+    char buf[64];
+    for (int i = 0; i < 31; i++)
         sprintf(buf + i*2, "%02x", hash[i]);
-    buf[64] = 0;
+    buf[62] = 0;
     return std::string(buf);
 }
 

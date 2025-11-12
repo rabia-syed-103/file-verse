@@ -114,7 +114,7 @@ struct OMNIHeader {
  */
 struct UserInfo {
     char username[32];          // Username (null-terminated)
-    char password_hash[65];     // Password hash (SHA-256)
+    char password_hash[64];     // Password hash (SHA-256)
     UserRole role;              // User role (4 bytes)
     uint64_t created_time;      // Account creation timestamp (Unix epoch)
     uint64_t last_login;        // Last login timestamp (Unix epoch)
