@@ -8,6 +8,7 @@
 #include "odf_types.hpp"
 
 class FSNode {
+
 public:
     FileEntry* entry;
     std::vector<char> data;
@@ -27,6 +28,8 @@ public:
     FSNode* getChild(const std::string& name);      // main search
     FSNode* findChild(const std::string& name);     // alias for getChild
     vector<FSNode*> getChildren() const;
+    FSNode* find_node_by_path(const string& path);
+
 
 
     void print() const;

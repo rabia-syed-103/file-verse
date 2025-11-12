@@ -8,14 +8,14 @@
 #include "FSNode.h"
 #include "FreeSpaceManager.h"
 
-
+using namespace std;
 struct FSInstance {
     std::string omni_path;
     OMNIHeader header;
     HashTable<UserInfo>* users;
     FSNode* root;
     FreeSpaceManager* fsm;
-    std::vector<void*> sessions;
+    vector<void*> sessions;
     uint next_file_index; 
 };
 

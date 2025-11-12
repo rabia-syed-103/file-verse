@@ -76,3 +76,52 @@ vector<FSNode*> FSNode::getChildren() const {
     return list;
 }
 
+FSNode* FSNode::find_node_by_path(const string& path) {
+    if (path.empty() || path[0] != '/') return nullptr;
+    if (path == "/") return this;
+    
+    FSNode* current = this;
+    size_t start = 1;
+    
+    while (start < path.size()) {
+        size_t end = path.find('/', start);
+        
+        // FIX: Handle the last part of the path correctly
+        std::string part;
+        if (end == std::string::npos) {
+            // Last component - take everything from start to end of string
+            part = path.substr(start);
+        } else {
+            // Middle component - take from start to the next /
+            part = path.substr(start, end - start);
+        }
+        
+        // Skip empty parts (e.g., from double slashes //)
+        if (part.empty()) {
+            if (end == std::string::npos) break;
+            start = end + 1;
+            continue;
+        }
+        
+        // Find child with this name
+        LinkedListNode<FSNode*>* childNode = current->children->getHead();
+        FSNode* child = nullptr;
+        
+        while (childNode != nullptr) {
+            if (childNode->data->entry->name == part) {
+                child = childNode->data;
+                break;
+            }
+            childNode = childNode->next;
+        }
+        
+        if (!child) return nullptr; // Path component not found
+        
+        current = child;
+        
+        if (end == std::string::npos) break; // We processed the last component
+        start = end + 1;
+    }
+    
+    return current;
+}
