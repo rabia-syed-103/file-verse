@@ -72,3 +72,12 @@ void FSNode::print() const {
     cout << (entry->getType() == EntryType::DIRECTORY ? "[DIR] " : "[FILE] ")
          << entry->name << endl;
 }
+FSNode* FSNode:: getChild(const std::string& name) {
+    LinkedListNode<FSNode*>* curr = children->getHead(); 
+    while (curr) {
+        if (curr->data->entry && curr->data->entry->name == name)
+            return curr->data;
+        curr = curr->next;
+    }
+    return nullptr;
+}

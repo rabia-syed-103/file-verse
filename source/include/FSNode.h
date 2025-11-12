@@ -22,7 +22,10 @@ public:
     bool removeChild(const string& name);
     FSNode* detachChild(const string& name);
     FSNode* findChild(const string& name);
+    FSNode* getChild(const std::string& name);
     void print() const;
+    FSNode* getChild(const std::string& name);
+    
 };
 
 #endif // FSNODE_H
