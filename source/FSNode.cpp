@@ -17,7 +17,7 @@ FSNode::~FSNode() {
         }
         delete children;
     }
-    delete entry; 
+    delete entry;
 }
 
 void FSNode::addChild(FSNode* child) {
@@ -27,57 +27,39 @@ void FSNode::addChild(FSNode* child) {
     }
 }
 
-bool FSNode::removeChild(const string& name) {
-    if (!children) return false;
-    auto node = children->getHead();
-    while (node) {
-        if (node->data->entry->name == name) {
-            FSNode* child = node->data;
-            children->remove(child);  
-            delete child;             
-            return true;
-        }
-        node = node->next;
-    }
-    return false;
-}
-
-FSNode* FSNode::detachChild(const string& name) {
+FSNode* FSNode::getChild(const std::string& name) {
     if (!children) return nullptr;
-    auto node = children->getHead();
-    while (node) {
-        if (node->data->entry->name == name) {
-            FSNode* child = node->data;
-            children->remove(child);  
-            child->parent = nullptr;  
-            return child;            
-        }
-        node = node->next;
-    }
-    return nullptr;
-}
-
-FSNode* FSNode::findChild(const string& name) {
-    if (!children) return nullptr;
-    auto node = children->getHead();
-    while (node) {
-        if (node->data->entry->name == name)
-            return node->data;
-        node = node->next;
-    }
-    return nullptr;
-}
-
-void FSNode::print() const {
-    cout << (entry->getType() == EntryType::DIRECTORY ? "[DIR] " : "[FILE] ")
-         << entry->name << endl;
-}
-FSNode* FSNode:: getChild(const std::string& name) {
-    LinkedListNode<FSNode*>* curr = children->getHead(); 
+    LinkedListNode<FSNode*>* curr = children->getHead();
     while (curr) {
-        if (curr->data->entry && curr->data->entry->name == name)
-            return curr->data;
+        FSNode* child = curr->data;
+        if (child->entry && child->entry->name == name)
+            return child;
         curr = curr->next;
     }
     return nullptr;
+}
+
+FSNode* FSNode::findChild(const std::string& name) {
+    return getChild(name);  // simply call getChild
+}
+
+bool FSNode::removeChild(const std::string& name) {
+    FSNode* child = getChild(name);
+    if (!child) return false;
+    children->remove(child);
+    delete child;
+    return true;
+}
+
+FSNode* FSNode::detachChild(const std::string& name) {
+    FSNode* child = getChild(name);
+    if (!child) return nullptr;
+    children->remove(child);
+    child->parent = nullptr;
+    return child;
+}
+
+void FSNode::print() const {
+    std::cout << (entry->getType() == EntryType::DIRECTORY ? "[DIR] " : "[FILE] ")
+              << entry->name << std::endl;
 }

@@ -8,7 +8,7 @@ using namespace std;
 template <typename T>
 struct LinkedListNode {
     T data;                    
-       LinkedListNode* next;
+    LinkedListNode* next;
 
     LinkedListNode(T d) : data(d), next(nullptr) {}
 };

@@ -16,6 +16,7 @@ struct FSInstance {
     FSNode* root;
     FreeSpaceManager* fsm;
     std::vector<void*> sessions;
+    uint next_file_index; 
 };
 
 
