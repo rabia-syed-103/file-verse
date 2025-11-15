@@ -40,6 +40,33 @@ metadata* meta = nullptr;
 static RequestQueue req_queue;
 
 // ----------------------- Helper functions -----------------------
+std::string read_until_eof(int client_sock, const std::string& eof_marker = "<<<EOF>>>") {
+    std::string buffer; // temporary buffer from recv
+    std::string data;   // final accumulated data
+
+    char recv_buf[1024];
+    while (true) {
+        ssize_t n = recv(client_sock, recv_buf, sizeof(recv_buf) - 1, 0);
+        if (n <= 0) break;  // client closed or error
+
+        recv_buf[n] = '\0';
+        buffer += recv_buf;
+
+        size_t pos = buffer.find(eof_marker);
+        if (pos != std::string::npos) {
+            data += buffer.substr(0, pos);
+            break;
+        }
+        // else, accumulate buffer only if it didn't contain EOF
+        if (!buffer.empty()) {
+            data += buffer;
+            buffer.clear();
+        }
+    }
+
+    return data;
+}
+
 void send_msg(int sock, const string& msg) {
     ssize_t off = 0;
     ssize_t total = (ssize_t)msg.size();
@@ -227,57 +254,49 @@ void handle_client_request(int client_sock, const string& raw_request) {
 
     // ------- FILE COMMANDS -------
     if (cmd == "CREATE") {
-        if (!session) { send_msg(client_sock, build_response("CREATE", session_id, "error", "ERROR_NOT_LOGGED_IN", request_id)); return; }
-        if (tokens.size() < 2) { send_msg(client_sock, build_response("CREATE", session_id, "error", "ERROR_INVALID_COMMAND", request_id)); return; }
-
-        string path = tokens[1];
-        // ask for content
-        send_msg(client_sock, build_response("CREATE", session_id, "message", "Enter content. End with <<<EOF>>>", request_id));
-        // read until terminator (may be split across recv calls)
-        string data;
-        string buffer;
-        while (true) {
-            string chunk = recv_msg(client_sock);
-            if (chunk.empty()) break;
-            buffer += chunk;
-            size_t pos = buffer.find("<<<EOF>>>");
-            if (pos != string::npos) {
-                data += buffer.substr(0, pos);
-                break;
-            } else {
-                data += buffer;
-                buffer.clear();
-            }
-        }
-        int res = fm->file_create(session, path.c_str(), data.c_str(), data.size());
-        send_msg(client_sock, build_response("CREATE", session_id, "result", error_to_string(static_cast<OFSErrorCodes>(res)), request_id));
-        return;
+    if (!session) { 
+        send_msg(client_sock, build_response("CREATE", session_id, "error", "ERROR_NOT_LOGGED_IN", request_id)); 
+        return; 
+    }
+    if (tokens.size() < 2) { 
+        send_msg(client_sock, build_response("CREATE", session_id, "error", "ERROR_INVALID_COMMAND", request_id)); 
+        return; 
     }
 
-    if (cmd == "EDIT") {
-        if (!session) { send_msg(client_sock, build_response("EDIT", session_id, "error", "ERROR_NOT_LOGGED_IN", request_id)); return; }
-        if (tokens.size() < 3) { send_msg(client_sock, build_response("EDIT", session_id, "error", "ERROR_INVALID_COMMAND", request_id)); return; }
-        string path = tokens[1];
-        size_t index = (size_t)stoul(tokens[2]);
-        send_msg(client_sock, build_response("EDIT", session_id, "message", "Enter new content. End with <<<EOF>>>", request_id));
-        string data, buffer;
-        while (true) {
-            string chunk = recv_msg(client_sock);
-            if (chunk.empty()) break;
-            buffer += chunk;
-            size_t pos = buffer.find("<<<EOF>>>");
-            if (pos != string::npos) {
-                data += buffer.substr(0, pos);
-                break;
-            } else {
-                data += buffer;
-                buffer.clear();
-            }
-        }
-        int res = fm->file_edit(session, path.c_str(), data.c_str(), data.size(), index);
-        send_msg(client_sock, build_response("EDIT", session_id, "result", error_to_string(static_cast<OFSErrorCodes>(res)), request_id));
-        return;
+    std::string path = tokens[1];
+
+    // ask for content
+    send_msg(client_sock, build_response("CREATE", session_id, "message", "Enter content. End with <<<EOF>>>", request_id));
+
+    // read content until <<<EOF>>>
+    std::string data = read_until_eof(client_sock);
+
+    int res = fm->file_create(session, path.c_str(), data.c_str(), data.size());
+    send_msg(client_sock, build_response("CREATE", session_id, "result", error_to_string(static_cast<OFSErrorCodes>(res)), request_id));
+    return;
+}
+
+if (cmd == "EDIT") {
+    if (!session) { 
+        send_msg(client_sock, build_response("EDIT", session_id, "error", "ERROR_NOT_LOGGED_IN", request_id)); 
+        return; 
     }
+    if (tokens.size() < 3) { 
+        send_msg(client_sock, build_response("EDIT", session_id, "error", "ERROR_INVALID_COMMAND", request_id)); 
+        return; 
+    }
+
+    std::string path = tokens[1];
+    size_t index = (size_t)std::stoul(tokens[2]);
+
+    send_msg(client_sock, build_response("EDIT", session_id, "message", "Enter new content. End with <<<EOF>>>", request_id));
+
+    std::string data = read_until_eof(client_sock);
+
+    int res = fm->file_edit(session, path.c_str(), data.c_str(), data.size(), index);
+    send_msg(client_sock, build_response("EDIT", session_id, "result", error_to_string(static_cast<OFSErrorCodes>(res)), request_id));
+    return;
+}
 
     if (cmd == "READ") {
         if (!session) { send_msg(client_sock, build_response("READ", session_id, "error", "ERROR_NOT_LOGGED_IN", request_id)); return; }
@@ -404,6 +423,20 @@ void handle_client_request(int client_sock, const string& raw_request) {
         send_msg(client_sock, build_response("SET_OWNER", session_id, "result", res == 0 ? "SUCCESS" : error_to_string(static_cast<OFSErrorCodes>(res)), request_id));
         return;
     }
+
+    if (cmd == "EXIT") {
+
+    remove_session(client_sock);
+
+    // Send goodbye message
+    send(client_sock,
+         "{ \"operation\": \"EXIT\", \"result\": \"BYE\" }\n",
+         40, 0);
+
+    close(client_sock);
+    return;
+}
+
 
     // Unknown command
     send_msg(client_sock, build_response("UNKNOWN_COMMAND", session_id, "error", "ERROR_UNKNOWN_COMMAND", request_id));
@@ -1019,9 +1052,12 @@ int main() {
 -Isource/include \
 -Isource/include/core \
 source/core/*.cpp \
+source/include/RequestQueue.cpp \
+source/server/session_manager.cpp \
 source/server/server.cpp \
 source/*.cpp \
 -o ofs_server \
 -pthread -lssl -lcrypto
+
 
 */
