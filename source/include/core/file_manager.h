@@ -31,7 +31,8 @@ public:
 
 private:
     FSNode* resolve_path(const std::string& path);    
-    bool check_permissions(void* session, FSNode* node); 
+    bool check_permissions(void* session, FSNode* node);
+
 };
 
 #endif // FILE_MANAGER_H

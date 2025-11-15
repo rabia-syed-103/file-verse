@@ -15,7 +15,9 @@ private:
     user_manager* um;
 
     FSNode* resolve_path(const string& path);
-    bool check_permissions(void* session, FSNode* node);
+    bool check_permissions(void* session, FSNode* node, uint32_t required_perms) ;
+    bool check_dir_permission(void* session, FSNode* node, uint32_t required_perm);
+    
 
 public:
     dir_manager(FSNode* root_node, user_manager* user_mgr);

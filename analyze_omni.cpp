@@ -172,3 +172,5 @@ int main(int argc, char* argv[]) {
     analyze_omni_file(filepath);
     return 0;
 }
+
+//g++ -std=c++17 -Isource/include -Isource/include/core source/core/*.cpp source/*.cpp analyze_omni.cpp -o analyze_omni -lssl -lcrypto

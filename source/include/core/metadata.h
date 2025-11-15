@@ -66,9 +66,9 @@ public:
     node->entry->owner[sizeof(node->entry->owner)-1] = '\0';
     
     // Give full permissions to new owner
-    node->entry->permissions |= static_cast<uint32_t>(FilePermissions::OWNER_READ)   |
+    /*node->entry->permissions |= static_cast<uint32_t>(FilePermissions::OWNER_READ)   |
                                 static_cast<uint32_t>(FilePermissions::OWNER_WRITE)  |
-                                static_cast<uint32_t>(FilePermissions::OWNER_EXECUTE);
+                                static_cast<uint32_t>(FilePermissions::OWNER_EXECUTE);*/
     
     return 0; // SUCCESS
 }

@@ -5,14 +5,16 @@ dir_manager::dir_manager(FSNode* root_node, user_manager* user_mgr)
     : root(root_node), um(user_mgr) {}
 
 FSNode* dir_manager::resolve_path(const string& path) {
+    if (path.empty() || path[0] != '/') return nullptr;
     if (path == "/") return root;
 
     FSNode* current = root;
-    size_t start = 1;  // Skip initial '/'
+    size_t start = 1;
+
     while (start < path.size()) {
         size_t end = path.find('/', start);
         string part = (end == string::npos) ? path.substr(start) : path.substr(start, end - start);
-        if (part.empty()) break;
+        if (part.empty()) { start = end + 1; continue; }
 
         current = current->getChild(part);
         if (!current) return nullptr;
@@ -23,14 +25,41 @@ FSNode* dir_manager::resolve_path(const string& path) {
     return current;
 }
 
-bool dir_manager::check_permissions(void* session, FSNode* node) {
-    if (!node || !session) return false;
+
+
+bool dir_manager::check_dir_permission(void* session, FSNode* node, uint32_t required_perm) {
+    if (!session || !node) return false;
 
     SessionInfo info;
-    if (um->get_session_info(session, &info) != 0)
-        return false;
+    if (um->get_session_info(session, &info) != 0) return false;
 
-    return (std::strcmp(info.user.username, node->entry->owner) == 0 ||  info.user.role == UserRole::ADMIN);
+    uint32_t perms = node->entry->permissions;
+
+    if (info.user.role == UserRole::ADMIN) return true;
+
+    if (info.user.username == node->entry->owner) {
+        // Owner bits
+        uint32_t owner_bits = 0;
+        if (required_perm & static_cast<uint32_t>(FilePermissions::OWNER_READ))
+            owner_bits |= static_cast<uint32_t>(FilePermissions::OWNER_READ);
+        if (required_perm & static_cast<uint32_t>(FilePermissions::OWNER_WRITE))
+            owner_bits |= static_cast<uint32_t>(FilePermissions::OWNER_WRITE);
+        if (required_perm & static_cast<uint32_t>(FilePermissions::OWNER_EXECUTE))
+            owner_bits |= static_cast<uint32_t>(FilePermissions::OWNER_EXECUTE);
+
+        return (perms & owner_bits) == owner_bits;
+    } else {
+        // Others bits
+        uint32_t others_bits = 0;
+        if (required_perm & static_cast<uint32_t>(FilePermissions::OWNER_READ))
+            others_bits |= static_cast<uint32_t>(FilePermissions::OTHERS_READ);
+        if (required_perm & static_cast<uint32_t>(FilePermissions::OWNER_WRITE))
+            others_bits |= static_cast<uint32_t>(FilePermissions::OTHERS_WRITE);
+        if (required_perm & static_cast<uint32_t>(FilePermissions::OWNER_EXECUTE))
+            others_bits |= static_cast<uint32_t>(FilePermissions::OTHERS_EXECUTE);
+
+        return (perms & others_bits) == others_bits;
+    }
 }
 
 
@@ -56,7 +85,8 @@ int dir_manager::dir_create(void* session, const char* path) {
     if (!parent)
         return static_cast<int>(OFSErrorCodes::ERROR_NOT_FOUND);
 
-    if (!check_permissions(session, parent))
+    // Require WRITE permission on parent to create
+    if (!check_dir_permission(session, parent, static_cast<uint32_t>(FilePermissions::OWNER_WRITE)))
         return static_cast<int>(OFSErrorCodes::ERROR_PERMISSION_DENIED);
 
     if (parent->getChild(dirname))
@@ -86,14 +116,13 @@ int dir_manager::dir_list(void* session, const char* path, FileEntry** entries, 
         return static_cast<int>(OFSErrorCodes::ERROR_NOT_FOUND);
 
     if (dir->entry->getType() != EntryType::DIRECTORY)
-    return static_cast<int>(OFSErrorCodes::ERROR_INVALID_OPERATION);
+        return static_cast<int>(OFSErrorCodes::ERROR_INVALID_OPERATION);
 
-
-    if (!check_permissions(session, dir))
+    // Require READ permission to list
+    if (!check_dir_permission(session, dir, static_cast<uint32_t>(FilePermissions::OWNER_READ)))
         return static_cast<int>(OFSErrorCodes::ERROR_PERMISSION_DENIED);
 
     vector<FSNode*> children = dir->getChildren();
- 
     *count = children.size();
 
     if (*count == 0) {
@@ -125,17 +154,18 @@ int dir_manager::dir_delete(void* session, const char* path) {
     if (node->entry->getType() != EntryType::DIRECTORY)
         return static_cast<int>(OFSErrorCodes::ERROR_INVALID_OPERATION);
 
+    // Require WRITE permission on parent to delete
+    FSNode* parent = node->parent;
+    if (!parent)
+        return static_cast<int>(OFSErrorCodes::ERROR_INVALID_OPERATION);
 
-    if (!check_permissions(session, node))
+    if (!check_dir_permission(session, parent, static_cast<uint32_t>(FilePermissions::OWNER_WRITE)))
         return static_cast<int>(OFSErrorCodes::ERROR_PERMISSION_DENIED);
 
     if (!node->getChildren().empty())
         return static_cast<int>(OFSErrorCodes::ERROR_DIRECTORY_NOT_EMPTY);
 
-    FSNode* parent = node->parent;
-
-    if (parent)
-        parent->removeChild(node->entry->name);
+    parent->removeChild(node->entry->name);
 
     cout << "[DEBUG] Directory deleted: " << path << endl;
     return static_cast<int>(OFSErrorCodes::SUCCESS);

@@ -49,13 +49,14 @@ int user_manager::user_login(void** session, const char* username, const char* p
         cout <<"Session";
     if(!username)
         cout <<"Username";
-    cout << password<<endl;
+    
     if (!session || !username || !password) return static_cast<int>(OFSErrorCodes::ERROR_INVALID_OPERATION);
 
     UserInfo* user = users->get(username);
     if (!user || !user->is_active) return static_cast<int>(OFSErrorCodes::ERROR_NOT_FOUND);
 
     std::string hashed = hash_password(password);
+    
     if (hashed != std::string(user->password_hash)) 
         return static_cast<int>(OFSErrorCodes::ERROR_PERMISSION_DENIED);
 

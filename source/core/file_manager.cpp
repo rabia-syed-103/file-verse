@@ -189,3 +189,4 @@ int file_manager::file_rename(void* session, const char* old_path, const char* n
 
     return static_cast<int>(OFSErrorCodes::SUCCESS);
 }
+
